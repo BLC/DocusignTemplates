@@ -17,13 +17,25 @@ module DocusignTemplates
       @data = data.deep_dup
       @disabled = false
       @is_radio = is_radio
+      @uploadable = false
 
       # tab positions in downloaded templates are systematically off
-      correct_positions!
+      @original_positions = correct_positions!
     end
 
     def as_composite_template_entry
-      data
+      if is_radio_group?
+        data.merge(radios: radios.map(&:as_composite_template_entry))
+      elsif is_list?
+        data.merge(@original_positions).merge(
+          list_items: list_items.map(&:as_composite_template_entry)
+        )
+      elsif is_pdf_field? || is_radio?
+        # PDF fields need positions un-corrected when uploaded
+        data.merge(@original_positions)
+      else
+        data
+      end
     end
 
     def merge!(other_data)
@@ -67,6 +79,27 @@ module DocusignTemplates
 
     def disabled?
       disabled
+    end
+
+    def uploadable?
+      if is_pdf_field?
+        @uploadable
+      else
+        true
+      end
+    end
+
+    def uploadable=(value)
+      boolean_value = !!value
+      @uploadable = boolean_value
+
+      if is_radio_group?
+        radios.each do |radio|
+          radio.data[:locked] = boolean_value.to_s
+        end
+      else
+        data[:locked] = boolean_value.to_s
+      end
     end
 
     def label
@@ -196,14 +229,21 @@ module DocusignTemplates
     private
 
     def correct_positions!
+      original_positions = {}
+
       if data[:x_position]
         old_x = x
         data[:x_position] = (x + x_correction).to_s
+        original_positions[:x_position] = old_x.to_s
       end
 
       if data[:y_position]
+        old_y = y
         data[:y_position] = (y + y_correction).to_s
+        original_positions[:y_position] = old_y.to_s
       end
+
+      original_positions
     end
 
     def x_correction

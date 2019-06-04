@@ -46,6 +46,13 @@ module DocusignTemplates
         result[type] = enabled_tabs.map(&:as_composite_template_entry)
       end
 
+      fields.each do |type, type_fields|
+        uploadable_fields = type_fields.reject(&:disabled?).select(&:uploadable?)
+
+        next if uploadable_fields.empty?
+        result[type] = uploadable_fields.map(&:as_composite_template_entry)
+      end
+
       result
     end
 

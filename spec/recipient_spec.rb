@@ -1,7 +1,7 @@
 module DocusignTemplates
   RSpec.describe Recipient do
     def make_tabs(type)
-      3.times.map do |index|
+      10.times.map do |index|
         {
           tab_type: type,
           tab_label: "#{type}.example.#{index}"
@@ -89,9 +89,21 @@ module DocusignTemplates
           tab.disabled = index.odd?
         end
 
+        recipient.fields.values.flatten.each_with_index do |tab, index|
+          tab.disabled = index.odd?
+          tab.uploadable = index % 3 == 0
+        end
+
         expected_tabs = {}.tap do |result|
           recipient.tabs.each do |type, type_tabs|
             result[type] = type_tabs.reject(&:disabled?).map(&:as_composite_template_entry)
+          end
+
+          recipient.fields.each do |type, type_fields|
+            result[type] = type_fields
+              .reject(&:disabled?)
+              .select(&:uploadable?)
+              .map(&:as_composite_template_entry)
           end
         end
 
