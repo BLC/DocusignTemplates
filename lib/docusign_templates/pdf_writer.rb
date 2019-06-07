@@ -67,6 +67,7 @@ module DocusignTemplates
       recipients.each do |recipient|
         recipient.fields_for_document(document).each do |field|
           next if field.disabled?
+          next if field.uploadable?
 
           if field.is_radio_group?
             field.radios.each do |radio|

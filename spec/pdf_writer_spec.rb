@@ -210,6 +210,21 @@ module DocusignTemplates
         expect(yielded_fields).to eq([])
       end
 
+      it "does not yield uploadable fields" do
+        recipients.each do |recipient|
+          expect(recipient).to receive(:fields_for_document).with(document).and_return([
+            instance_double(Field, disabled?: false, uploadable?: true)
+          ])
+        end
+
+        yielded_fields = []
+        writer.send(:each_required_page_field, page_index) do |field|
+          yielded_fields << field
+        end
+
+        expect(yielded_fields).to eq([])
+      end
+
       context "radio group fields" do
         let(:radios) do
           [
@@ -221,7 +236,12 @@ module DocusignTemplates
         it "yields each radio for the page index" do
           recipients.each do |recipient|
             expect(recipient).to receive(:fields_for_document).with(document).and_return([
-              instance_double(Field, disabled?: false, is_radio_group?: true, radios: radios)
+              instance_double(Field, {
+                disabled?: false,
+                is_radio_group?: true,
+                uploadable?: false,
+                radios: radios
+              })
             ])
           end
 
@@ -241,8 +261,18 @@ module DocusignTemplates
         it "yields each field for the page index" do
           recipients.each do |recipient|
             expect(recipient).to receive(:fields_for_document).with(document).and_return([
-              instance_double(Field, disabled?: false, is_radio_group?: false, page_index: 0),
-              instance_double(Field, disabled?: false, is_radio_group?: false, page_index: page_index)
+              instance_double(Field, {
+                disabled?: false,
+                is_radio_group?: false,
+                page_index: 0,
+                uploadable?: false
+              }),
+              instance_double(Field, {
+                disabled?: false,
+                is_radio_group?: false,
+                page_index: page_index,
+                uploadable?: false
+              })
             ])
           end
 

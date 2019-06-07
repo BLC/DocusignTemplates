@@ -68,12 +68,98 @@ module DocusignTemplates
           expect(field.x).to eq(x)
           expect(field.y).to eq(y)
         end
+
+        it "sets the @original_positions instance variable" do
+          data[:tab_type] = Field::FieldTypes::TEXT
+          field = Field.new(data)
+
+          expect(field.instance_variable_get(:@original_positions)).to eq({
+            x_position: x.to_s,
+            y_position: y.to_s
+          })
+        end
       end
     end
 
     describe "as_composite_template_entry" do
-      it "returns the data" do
-        expect(field.as_composite_template_entry).to eq(field.data)
+      let(:original_positions) do
+        {
+          x_position: "123",
+          y_position: "45"
+        }
+      end
+
+      let(:data) do
+        {
+          tab_label: "tab.label",
+          tab_type: Field::FieldTypes::TEXT
+        }.merge(original_positions)
+      end
+
+      context "when a radio group field" do
+        let(:radios) do
+          3.times.map do |index|
+            Field.new(data.merge(value: "value_#{index}"), true)
+          end
+        end
+
+        before do
+          allow(field).to receive(:is_radio_group?).and_return(true)
+          allow(field).to receive(:radios).and_return(radios)
+        end
+
+        it "returns the data with serialized radios" do
+          expect(field.as_composite_template_entry).to eq(
+            field.data.merge(radios: radios.map(&:as_composite_template_entry))
+          )
+        end
+      end
+
+      context "when a list field" do
+        let(:list_items) do
+          3.times.map do |index|
+            Field.new(data.merge(value: "value_#{index}"), true)
+          end
+        end
+
+        before do
+          allow(field).to receive(:is_list?).and_return(true)
+          allow(field).to receive(:list_items).and_return(list_items)
+        end
+
+        it "returns the data with serialized list items" do
+          expect(field.as_composite_template_entry).to eq(
+            field.data.merge(original_positions).merge(
+              list_items: list_items.map(&:as_composite_template_entry)
+            )
+          )
+        end
+      end
+
+      context "when another type of pdf field" do
+        it "returns the data merged with the original positions" do
+          expect(field.as_composite_template_entry).to eq(field.data.merge(original_positions))
+        end
+      end
+
+      context "when a radio" do
+        before do
+          allow(field).to receive(:is_radio?).and_return(true)
+        end
+
+        it "returns the data merged with the original positions" do
+          expect(field.as_composite_template_entry).to eq(field.data.merge(original_positions))
+        end
+      end
+
+      context "when not a pdf field" do
+        before do
+          allow(field).to receive(:is_pdf_field?).and_return(false)
+        end
+
+        it "returns the data" do
+          expect(field.as_composite_template_entry).to eq(field.data)
+        end
       end
     end
 
@@ -231,6 +317,86 @@ module DocusignTemplates
 
         field.disabled = false
         expect(field.disabled?).to be(false)
+      end
+    end
+
+    describe "uploadable?" do
+      context "when a pdf field" do
+        before do
+          allow(field).to receive(:is_pdf_field?).and_return(true)
+        end
+
+        it "returns false by default" do
+          expect(field.uploadable?).to be(false)
+        end
+
+        it "returns true if set to uploadable" do
+          field.uploadable = true
+          expect(field.uploadable?).to be(true)
+        end
+      end
+
+      context "when a tab" do
+        before do
+          allow(field).to receive(:is_pdf_field?).and_return(false)
+        end
+
+        it "returns true" do
+          expect(field.uploadable?).to be(true)
+        end
+      end
+    end
+
+    describe "uploadable=" do
+      before do
+        allow(field).to receive(:is_pdf_field?).and_return(true)
+      end
+
+      it "sets uploadable to the value" do
+        field.uploadable = false
+        expect(field.uploadable?).to be(false)
+
+        field.uploadable = true
+        expect(field.uploadable?).to be(true)
+      end
+
+      context "when a radio group" do
+        let(:radios) do
+          3.times.map do |index|
+            Field.new(data.merge(value: "value_#{index}"), true)
+          end
+        end
+
+        before do
+          allow(field).to receive(:is_radio_group?).and_return(true)
+          allow(field).to receive(:radios).and_return(radios)
+        end
+
+        it "sets locked in each radio to the value" do
+          field.uploadable = false
+          radios.each do |radio|
+            expect(radio.data[:locked]).to eq(false.to_s)
+          end
+
+          field.uploadable = true
+          radios.each do |radio|
+            expect(radio.data[:locked]).to eq(true.to_s)
+          end
+        end
+      end
+
+      context "when not a radio group" do
+        before do
+          allow(field).to receive(:is_radio_group?).and_return(false)
+        end
+
+        it "sets locked in the field to the value" do
+          field.uploadable = false
+          expect(field.data[:locked]).to eq(false.to_s)
+
+          field.uploadable = true
+          expect(field.data[:locked]).to eq(true.to_s)
+        end
       end
     end
 
