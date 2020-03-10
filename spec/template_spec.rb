@@ -161,8 +161,13 @@ module DocusignTemplates
     describe "as_composite_template_entry" do
       let(:sequence) { 1 }
       let(:document_entry) do
-        { document: "entry" }
+        {
+          document_id: "42",
+          name: "some-name.pdf"
+        }
       end
+      let(:pdf_data) { "ds78fda87fd6dsf687d7s6887dfs" }
+      let(:options) { { some: "options" } }
 
       before do
         template.documents.each do |document|
@@ -174,10 +179,10 @@ module DocusignTemplates
         template.documents.each do |document|
           expect(document)
             .to receive(:as_composite_template_entry)
-            .with(template.recipients.values.flatten)
+            .with(template.recipients.values.flatten, options)
         end
 
-        expect(template.as_composite_template_entry(template.recipients, sequence)).to eq(
+        expect(template.as_composite_template_entry(template.recipients, sequence, options)).to eq(
           sequence: sequence.to_s,
           recipients: {}.tap do |result|
             template.recipients.each do |type, type_recipients|
@@ -187,24 +192,44 @@ module DocusignTemplates
           documents: template.documents.map(&:as_composite_template_entry)
         )
       end
-    end
 
-    describe "async_as_composite_template_entry" do
-      let(:sequence) { 1 }
-      let(:sync_result) do
-        { some: "result" }
-      end
+      describe "when multipart is true" do
+        let(:options) { { multipart: true } }
 
-      before do
-        allow(template).to receive(:as_composite_template_entry).and_return(sync_result)
-      end
+        it "combines all data into a composite template entry + pdf data" do
+          template.documents.each do |document|
+            expect(document)
+              .to receive(:as_composite_template_entry)
+              .with(template.recipients.values.flatten, options)
 
-      it "returns the same data as as_composite_template_entry" do
-        expect(
-          template.async_as_composite_template_entry(template.recipients, sequence)
-        ).to eq(
-          template.as_composite_template_entry(template.recipients, sequence)
-        )
+            expect(document)
+              .to receive(:to_pdf)
+              .with(template.recipients.values.flatten)
+              .and_return(pdf_data)
+          end
+
+          composite_template, document_data = template.as_composite_template_entry(
+            template.recipients, sequence, options
+          )
+
+          expect(composite_template).to eq(
+            sequence: sequence.to_s,
+            recipients: {}.tap do |result|
+              template.recipients.each do |type, type_recipients|
+                result[type] = type_recipients.map(&:as_composite_template_entry)
+              end
+            end,
+            documents: template.documents.map(&:as_composite_template_entry)
+          )
+
+          expect(document_data).to eq([
+            {
+              id: document_entry[:document_id],
+              filename: document_entry[:name],
+              data: pdf_data
+            }
+          ])
+        end
       end
     end
   end

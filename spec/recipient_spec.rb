@@ -34,9 +34,15 @@ module DocusignTemplates
       }
     end
 
-    let(:recipient) { Recipient.new(data) }
+    let(:template) { instance_double(Template) }
+
+    let(:recipient) { Recipient.new(data, template) }
 
     describe "initialize" do
+      it "sets the template" do
+        expect(recipient.template).to be(template)
+      end
+
       it "sets data to a deep copy of data without tabs or pdf_fields" do
         original = data[:deep][:key]
         expect(recipient.data).to eq(data.except(:pdf_fields, :tabs))
@@ -84,6 +90,10 @@ module DocusignTemplates
     end
 
     describe "as_composite_template_entry" do
+      before do
+        allow_any_instance_of(Field).to receive(:document_id).and_return("42")
+      end
+
       it "includes non-disabled tabs on the data" do
         recipient.tabs.values.flatten.each_with_index do |tab, index|
           tab.disabled = index.odd?
@@ -123,7 +133,12 @@ module DocusignTemplates
 
     describe "fields_for_document" do
       let(:document_id) { "42" }
-      let(:document) { instance_double(Document, document_id: document_id) }
+      let(:document) { instance_double(Document, original_document_id: document_id, document_id: document_id) }
+      let(:zero_document) { instance_double(Document, original_document_id: "0", document_id: "0") }
+
+      before do
+        allow(template).to receive(:documents).and_return([document, zero_document])
+      end
 
       it "returns all fields for the document" do
         expected_fields = [].tap do |result|
@@ -139,7 +154,12 @@ module DocusignTemplates
 
     describe "tabs_for_document" do
       let(:document_id) { "42" }
-      let(:document) { instance_double(Document, document_id: document_id) }
+      let(:document) { instance_double(Document, original_document_id: document_id, document_id: document_id) }
+      let(:zero_document) { instance_double(Document, original_document_id: "0", document_id: "0") }
+
+      before do
+        allow(template).to receive(:documents).and_return([document, zero_document])
+      end
 
       it "returns all tabs for the document" do
         expected_tabs = [].tap do |result|

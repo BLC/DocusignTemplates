@@ -8,11 +8,15 @@ module DocusignTemplates
         }
       }
     end
-
-    let(:field) { Field.new(data) }
-    let(:radio_field) { Field.new(data, true) }
+    let(:template) { instance_double(Template) }
+    let(:field) { Field.new(data, template) }
+    let(:radio_field) { Field.new(data, template, true) }
 
     describe "initialize" do
+      it "sets the template" do
+        expect(field.template).to be(template)
+      end
+
       it "deep duplicates the data" do
         original = data[:deep][:key]
         expect(field.data).to eq(data)
@@ -40,14 +44,14 @@ module DocusignTemplates
 
         it "offsets a pdf field correctly" do
           data[:tab_type] = Field::FieldTypes::TEXT
-          field = Field.new(data)
+          field = Field.new(data, template)
 
           expect(field.x).to eq(x + 3)
           expect(field.y).to eq(y + 1)
         end
 
         it "offsets a radio field correctly" do
-          field = Field.new(data, true)
+          field = Field.new(data, template, true)
 
           expect(field.x).to eq(x + 3)
           expect(field.y).to eq(y + 1)
@@ -55,7 +59,7 @@ module DocusignTemplates
 
         it "offsets a signature field correctly" do
           data[:tab_type] = Field::FieldTypes::SIGNATURE
-          field = Field.new(data)
+          field = Field.new(data, template)
 
           expect(field.x).to eq(x)
           expect(field.y).to eq(y - 21)
@@ -63,7 +67,7 @@ module DocusignTemplates
 
         it "does not offset other fields" do
           data[:tab_type] = "other"
-          field = Field.new(data)
+          field = Field.new(data, template)
 
           expect(field.x).to eq(x)
           expect(field.y).to eq(y)
@@ -71,7 +75,7 @@ module DocusignTemplates
 
         it "sets the @original_positions instance variable" do
           data[:tab_type] = Field::FieldTypes::TEXT
-          field = Field.new(data)
+          field = Field.new(data, template)
 
           expect(field.instance_variable_get(:@original_positions)).to eq({
             x_position: x.to_s,
@@ -96,21 +100,32 @@ module DocusignTemplates
         }.merge(original_positions)
       end
 
+      let(:document_id) { "42" }
+      let(:base_data) { field.data.merge(document_id: document_id) }
+
+      before do
+        allow(field).to receive(:document_id).and_return(document_id)
+      end
+
       context "when a radio group field" do
         let(:radios) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
         before do
           allow(field).to receive(:is_radio_group?).and_return(true)
           allow(field).to receive(:radios).and_return(radios)
+
+          radios.each do |radio|
+            allow(radio).to receive(:document_id).and_return(document_id)
+          end
         end
 
         it "returns the data with serialized radios" do
           expect(field.as_composite_template_entry).to eq(
-            field.data.merge(radios: radios.map(&:as_composite_template_entry))
+            base_data.merge(radios: radios.map(&:as_composite_template_entry))
           )
         end
       end
@@ -118,18 +133,22 @@ module DocusignTemplates
       context "when a list field" do
         let(:list_items) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
         before do
           allow(field).to receive(:is_list?).and_return(true)
           allow(field).to receive(:list_items).and_return(list_items)
+
+          list_items.each do |list_item|
+            allow(list_item).to receive(:document_id).and_return(document_id)
+          end
         end
 
         it "returns the data with serialized list items" do
           expect(field.as_composite_template_entry).to eq(
-            field.data.merge(original_positions).merge(
+            base_data.merge(original_positions).merge(
               list_items: list_items.map(&:as_composite_template_entry)
             )
           )
@@ -138,7 +157,7 @@ module DocusignTemplates
 
       context "when another type of pdf field" do
         it "returns the data merged with the original positions" do
-          expect(field.as_composite_template_entry).to eq(field.data.merge(original_positions))
+          expect(field.as_composite_template_entry).to eq(base_data.merge(original_positions))
         end
       end
 
@@ -148,7 +167,7 @@ module DocusignTemplates
         end
 
         it "returns the data merged with the original positions" do
-          expect(field.as_composite_template_entry).to eq(field.data.merge(original_positions))
+          expect(field.as_composite_template_entry).to eq(base_data.merge(original_positions))
         end
       end
 
@@ -158,7 +177,7 @@ module DocusignTemplates
         end
 
         it "returns the data" do
-          expect(field.as_composite_template_entry).to eq(field.data)
+          expect(field.as_composite_template_entry).to eq(base_data)
         end
       end
     end
@@ -260,7 +279,7 @@ module DocusignTemplates
       context "when a radio group" do
         let(:radios) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
@@ -282,7 +301,7 @@ module DocusignTemplates
       context "when a list" do
         let(:list_items) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
@@ -363,7 +382,7 @@ module DocusignTemplates
       context "when a radio group" do
         let(:radios) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
@@ -430,7 +449,7 @@ module DocusignTemplates
       context "when a radio group" do
         let(:radios) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
@@ -448,7 +467,7 @@ module DocusignTemplates
       context "when a list" do
         let(:list_items) do
           3.times.map do |index|
-            Field.new(data.merge(value: "value_#{index}"), true)
+            Field.new(data.merge(value: "value_#{index}"), template, true)
           end
         end
 
@@ -548,11 +567,59 @@ module DocusignTemplates
       end
     end
 
+    describe "document" do
+      let(:original_document_id) { "42" }
+      let(:matching_document) do
+        instance_double(Document, original_document_id: original_document_id)
+      end
+      let(:documents) do
+        [
+          instance_double(Document, original_document_id: "123"),
+          matching_document
+        ]
+      end
+
+      before do
+        allow(field).to receive(:original_document_id).and_return(original_document_id)
+        allow(template).to receive(:documents).and_return(documents)
+      end
+
+      it "is the template document with the matching original_document_id" do
+        expect(field.document).to be(matching_document)
+      end
+    end
+
     describe "document_id" do
+      let(:document) do
+        instance_double(Document, document_id: "123")
+      end
+
+      context "when there is a document" do
+        before do
+          allow(field).to receive(:document).and_return(document)
+        end
+
+        it "is the matching document document_id" do
+          expect(field.document_id).to be(document.document_id)
+        end
+      end
+
+      context "when there is not a document" do
+        before do
+          allow(field).to receive(:document).and_return(nil)
+        end
+
+        it "is nil" do
+          expect(field.document_id).to be(nil)
+        end
+      end
+    end
+
+    describe "original_document_id" do
       it "returns the document_id from data" do
         document_id = "123"
         data[:document_id] = document_id
-        expect(field.document_id).to eq(document_id)
+        expect(field.original_document_id).to eq(document_id)
       end
     end
 
@@ -560,7 +627,7 @@ module DocusignTemplates
       context "when a radio group" do
         let(:radios) do
           3.times.map do |index|
-            Field.new(data.merge(page_number: index.to_s), true)
+            Field.new(data.merge(page_number: index.to_s), template, true)
           end
         end
 

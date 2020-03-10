@@ -60,41 +60,35 @@ module DocusignTemplates
 
     # NOTE: Recipients should be an object mapping <string,Recipient[]>, where the
     # string is the recipient type (eg: "signers")
-    def as_composite_template_entry(recipients, sequence)
+    #
+    # NOTE: When `options[:multipart]` is `true`, this will return an array where the first entry
+    # is the composite entry, and the second entry is an array of multipart document entries.
+    def as_composite_template_entry(recipients, sequence, options = {})
       all_type_recipients = recipients.values.flatten
 
-      {
+      composite_entry = {
         sequence: sequence.to_s,
         recipients: recipients_for_composite_template_entry(recipients),
         documents: documents.map do |document|
-          document.as_composite_template_entry(all_type_recipients)
+          document.as_composite_template_entry(all_type_recipients, options)
         end
       }
-    end
 
-    # Generates the tempalte in new process, bypassing the GIL
-    # Allows for a speedup when run in a thread in CRuby
-    # NOTE: No performance benefit unless ran in a multithreaded context
-    def async_as_composite_template_entry(recipients, sequence)
-      reader, writer = IO.pipe
+      if options[:multipart]
+        document_data = documents.map.with_index do |document, index|
+          matching = composite_entry[:documents][index]
 
-      pid = fork do
-        reader.close
+          {
+            id: matching[:document_id],
+            filename: matching[:name],
+            data: document.to_pdf(all_type_recipients)
+          }
+        end
 
-        writer.write(
-          JSON.dump(as_composite_template_entry(recipients, sequence))
-        )
-
-        writer.close
-        Kernel.exit!
+        [composite_entry, document_data]
+      else
+        composite_entry
       end
-
-      writer.close
-      result = JSON.parse(reader.read).deep_symbolize_keys
-
-      Process.wait(pid)
-      reader.close
-      result
     end
 
     private
@@ -116,7 +110,7 @@ module DocusignTemplates
 
       data[:recipients].each do |type, type_recipients|
         results[type] = type_recipients.map do |recipient|
-          Recipient.new(recipient)
+          Recipient.new(recipient, self)
         end
       end
 

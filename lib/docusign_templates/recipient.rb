@@ -1,8 +1,9 @@
 module DocusignTemplates
   class Recipient
-    attr_reader :data, :fields, :tabs
+    attr_reader :data, :template, :fields, :tabs
 
-    def initialize(data)
+    def initialize(data, template)
+      @template = template
       @data = data.except(:tabs, :pdf_fields).deep_dup
       @fields = parse_fields_or_tabs(data[:pdf_fields])
       @tabs = parse_fields_or_tabs(data[:tabs])
@@ -65,7 +66,7 @@ module DocusignTemplates
 
       fields_or_tabs.each do |type, type_fields|
         result[type] = type_fields.map do |field|
-          Field.new(field)
+          Field.new(field, template)
         end
       end
 
