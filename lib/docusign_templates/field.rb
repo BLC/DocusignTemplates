@@ -10,11 +10,12 @@ module DocusignTemplates
       INITIAL = "initialhere"
     end
 
-    attr_reader :data
+    attr_reader :data, :template
     attr_accessor :disabled
 
-    def initialize(data, is_radio = false)
+    def initialize(data, template, is_radio = false)
       @data = data.deep_dup
+      @template = template
       @disabled = false
       @is_radio = is_radio
       @uploadable = false
@@ -24,17 +25,19 @@ module DocusignTemplates
     end
 
     def as_composite_template_entry
+      base_data = data.merge(document_id: document_id)
+
       if is_radio_group?
-        data.merge(radios: radios.map(&:as_composite_template_entry))
+        base_data.merge(radios: radios.map(&:as_composite_template_entry))
       elsif is_list?
-        data.merge(@original_positions).merge(
+        base_data.merge(@original_positions).merge(
           list_items: list_items.map(&:as_composite_template_entry)
         )
       elsif is_pdf_field? || is_radio?
         # PDF fields need positions un-corrected when uploaded
-        data.merge(@original_positions)
+        base_data.merge(@original_positions)
       else
-        data
+        base_data
       end
     end
 
@@ -170,8 +173,25 @@ module DocusignTemplates
       data[:recipient_id]
     end
 
-    def document_id
+    def document
+      @document ||= template.documents.find do |document|
+        document.original_document_id == original_document_id
+      end
+    end
+
+    # The original document_id as configured in the template. Used to find the matching document
+    # in the template.
+    def original_document_id
       data[:document_id]
+    end
+
+    # the document_id as will be included in as_composite_template_entry
+    def document_id
+      if document
+        document.document_id
+      else
+        nil
+      end
     end
 
     def page_number
@@ -214,7 +234,7 @@ module DocusignTemplates
       return [] unless is_radio_group?
 
       @radios ||= data[:radios].map do |radio|
-        Field.new(radio, true)
+        Field.new(radio, template, true)
       end
     end
 
@@ -222,7 +242,7 @@ module DocusignTemplates
       return [] unless is_list?
 
       @list_items ||= data[:list_items].map do |list_item|
-        Field.new(list_item, true)
+        Field.new(list_item, template, true)
       end
     end
 

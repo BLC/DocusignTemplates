@@ -19,6 +19,23 @@ module DocusignTemplates
     let(:recipient) { instance_double(Recipient) }
     let(:recipients) { [recipient] }
 
+    describe ".unique_document_id" do
+      it "returns a different id each time" do
+        first = Document.unique_document_id
+        second = Document.unique_document_id
+        third = Document.unique_document_id
+
+        expect(second).to eq(first + 1)
+        expect(third).to eq(second + 1)
+      end
+
+      it "cycles after 999 to 1" do
+        Document.instance_variable_set(:@last_id, 999)
+        expect(Document.unique_document_id).to eq(999)
+        expect(Document.unique_document_id).to eq(1)
+      end
+    end
+
     describe "initialize" do
       it "deep duplicates the data" do
         original = data[:deep][:key]
@@ -30,6 +47,13 @@ module DocusignTemplates
 
       it "sets the base_directory" do
         expect(document.base_directory).to eq(base_directory)
+      end
+
+      it "sets the document_id to a unique id" do
+        id = 32433232132432
+        allow(Document).to receive(:unique_document_id).and_return(id)
+        instance = Document.new(data, base_directory)
+        expect(instance.document_id).to eq(id)
       end
     end
 
@@ -58,9 +82,22 @@ module DocusignTemplates
 
         expect(document.as_composite_template_entry(recipients)).to eq(
           document.data.except(:path).merge(
+            document_id: document.document_id,
             document_base64: Base64.encode64(pdf)
           )
         )
+      end
+
+      describe "when multipart is true in options" do
+        it "returns a properly formatted entry without data" do
+          expect(document).not_to receive(:to_pdf)
+
+          expect(document.as_composite_template_entry(recipients, multipart: true)).to eq(
+            document.data.except(:path).merge(
+              document_id: document.document_id
+            )
+          )
+        end
       end
     end
 
@@ -70,9 +107,9 @@ module DocusignTemplates
       end
     end
 
-    describe "document_id" do
+    describe "original_document_id" do
       it "pulls the document_id from the data" do
-        expect(document.document_id).to eq(data[:document_id])
+        expect(document.original_document_id).to eq(data[:document_id])
       end
     end
 
