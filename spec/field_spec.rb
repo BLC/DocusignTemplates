@@ -62,7 +62,7 @@ module DocusignTemplates
           field = Field.new(data, template)
 
           expect(field.x).to eq(x)
-          expect(field.y).to eq(y - 21)
+          expect(field.y).to eq(y)
         end
 
         it "does not offset other fields" do
