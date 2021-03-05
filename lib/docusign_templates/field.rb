@@ -277,8 +277,6 @@ module DocusignTemplates
     def y_correction
       if is_pdf_field? || is_radio?
         1
-      elsif is_signature?
-        -21
       else
         0
       end
